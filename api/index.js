@@ -13,7 +13,7 @@ db.services = new Datastore({ filename: "db/services.db", autoload: true });
 const storage = multer.diskStorage({
   destination: "/var/www/www-root/data/simple-api/public/",
   filename: (req, file, cb) => {
-    cb(null, Date.now() + "-" + file.originalname);
+    cb(null, Date.now() + "-" + Buffer.from(file.originalname, 'latin1').toString());
   },
 });
 
@@ -25,7 +25,7 @@ export default Router()
     res.status(200).json(reviews);
   })
 
-  .post("/reviews/new", upload.any(), (req, res) => {
+  .post("/reviews/new", (req, res) => {
     const body = req.body;
     const newReview = {
       ...body,
@@ -42,7 +42,7 @@ export default Router()
     res.status(200).json(reviewId);
   })
 
-  .put("/reviews/update/:reviewId", upload.any(), (req, res) => {
+  .put("/reviews/update/:reviewId", (req, res) => {
     const reviewId = req.params?.reviewId;
     const body = req.body;
     db.reviews.update({ _id: reviewId }, body);
@@ -94,9 +94,15 @@ export default Router()
     res.status(200).json(questions);
   })
 
-  .post("/questions/new", (req, res) => {
+   .post("/questions/new", upload.single("file"), (req, res) => {
     const body = req.body;
-    db.questions.insert(body, (err, question) => {
+    const newQuestion = {
+      ...body,
+      file: "https://podrostok-syktyvkar.ru/api/download/" + req.file.filename,
+    }
+     console.warn(newQuestion)
+    db.questions.insert(newQuestion, (err, question) => {
+      console.warn(question)
       res.status(200).json(question);
     });
   })
@@ -107,14 +113,28 @@ export default Router()
     res.status(200).json(questionId);
   })
 
-  .put("/questions/update/:questionId", (req, res) => {
+  ..put("/questions/update/:questionId", upload.single("file"), (req, res) => {
     const questionId = req.params?.questionId;
     const body = req.body;
-    db.questions.update({ _id: questionId }, body);
+    const updatedQuestion = {
+      ...body,
+      file: req.file
+        ? "https://podrostok-syktyvkar.ru/api/download/" + req.file.filename
+        : body.file,
+    };
+    db.questions.update({ _id: questionId }, updatedQuestion);
+    db.questions.persistence.compactDatafile();
     db.questions.findOne({ _id: questionId }, {}, (err, question) => {
       res.status(200).json(question);
     });
   })
+
+  .get("/download/:fileName", (req, res) => {
+    const fileName= req.params?.fileName;
+    const filePath = "/var/www/www-root/data/simple-api/public/" + fileName;
+    res.download(filePath);  
+  })
+
 
   .get("/services", (req, res) => {
     const services = db.services.getAllData();
