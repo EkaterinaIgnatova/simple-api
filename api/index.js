@@ -13,7 +13,10 @@ db.services = new Datastore({ filename: "db/services.db", autoload: true });
 const storage = multer.diskStorage({
   destination: "/var/www/www-root/data/simple-api/public/",
   filename: (req, file, cb) => {
-    cb(null, Date.now() + "-" + Buffer.from(file.originalname, 'latin1').toString());
+    cb(
+      null,
+      Date.now() + "-" + Buffer.from(file.originalname, "latin1").toString(),
+    );
   },
 });
 
@@ -94,15 +97,16 @@ export default Router()
     res.status(200).json(questions);
   })
 
-   .post("/questions/new", upload.single("file"), (req, res) => {
+  .post("/questions/new", upload.array("files[]"), (req, res) => {
     const body = req.body;
     const newQuestion = {
       ...body,
-      file: "https://podrostok-syktyvkar.ru/api/download/" + req.file.filename,
-    }
-     console.warn(newQuestion)
+      fileNames: req.files.map(
+        (el) => "https://podrostok-syktyvkar.ru/api/download/" + el.filename,
+      ),
+    };
     db.questions.insert(newQuestion, (err, question) => {
-      console.warn(question)
+      console.warn(question);
       res.status(200).json(question);
     });
   })
@@ -113,14 +117,18 @@ export default Router()
     res.status(200).json(questionId);
   })
 
-  ..put("/questions/update/:questionId", upload.single("file"), (req, res) => {
+  .put("/questions/update/:questionId", upload.array("files[]"), (req, res) => {
     const questionId = req.params?.questionId;
     const body = req.body;
+    body.fileNames = JSON.parse(JSON.stringify(body.fileNames || []));
     const updatedQuestion = {
       ...body,
-      file: req.file
-        ? "https://podrostok-syktyvkar.ru/api/download/" + req.file.filename
-        : body.file,
+      fileNames: [
+        ...body.fileNames,
+        ...req.files.map(
+          (el) => "https://podrostok-syktyvkar.ru/api/download/" + el.filename,
+        ),
+      ],
     };
     db.questions.update({ _id: questionId }, updatedQuestion);
     db.questions.persistence.compactDatafile();
@@ -130,11 +138,10 @@ export default Router()
   })
 
   .get("/download/:fileName", (req, res) => {
-    const fileName= req.params?.fileName;
+    const fileName = req.params?.fileName;
     const filePath = "/var/www/www-root/data/simple-api/public/" + fileName;
-    res.download(filePath);  
+    res.download(filePath, fileName.slice(14));
   })
-
 
   .get("/services", (req, res) => {
     const services = db.services.getAllData();
@@ -143,7 +150,7 @@ export default Router()
 
   .post("/services/new", upload.single("img"), (req, res) => {
     const body = req.body;
-    body.prices = JSON.parse(JSON.stringify(body.prices));
+    body.prices = JSON.parse(JSON.stringify(body.prices || []));
     const newService = {
       ...body,
       img: "https://podrostok-syktyvkar.ru/img/" + req.file.filename,
@@ -162,7 +169,7 @@ export default Router()
   .put("/services/update/:serviceId", upload.single("img"), (req, res) => {
     const serviceId = req.params?.serviceId;
     const body = req.body;
-    body.prices = JSON.parse(JSON.stringify(body.prices));
+    body.prices = JSON.parse(JSON.stringify(body.prices || []));
     const updatedService = {
       ...body,
       img: req.file
